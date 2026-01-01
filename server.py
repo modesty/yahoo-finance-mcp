@@ -85,20 +85,19 @@ async def get_historical_stock_prices(
             Intraday data cannot extend last 60 days
             Default is "1d"
     """
-    company = yf.Ticker(ticker)
     try:
-        if company.isin is None:
-            print(f"Company ticker {ticker} not found.")
-            return f"Company ticker {ticker} not found."
+        company = yf.Ticker(ticker)
+        # Get the historical data directly (isin check is slow and unreliable)
+        hist_data = company.history(period=period, interval=interval)
+        if hist_data.empty:
+            print(f"No historical data found for ticker {ticker}.")
+            return f"No historical data found for ticker {ticker}."
+        hist_data = hist_data.reset_index(names="Date")
+        hist_data = hist_data.to_json(orient="records", date_format="iso")
+        return hist_data
     except Exception as e:
         print(f"Error: getting historical stock prices for {ticker}: {e}")
         return f"Error: getting historical stock prices for {ticker}: {e}"
-
-    # If the company is found, get the historical data
-    hist_data = company.history(period=period, interval=interval)
-    hist_data = hist_data.reset_index(names="Date")
-    hist_data = hist_data.to_json(orient="records", date_format="iso")
-    return hist_data
 
 
 @yfinance_server.tool(
@@ -113,16 +112,17 @@ Args:
 )
 async def get_stock_info(ticker: str) -> str:
     """Get stock information for a given ticker symbol"""
-    company = yf.Ticker(ticker)
     try:
-        if company.isin is None:
-            print(f"Company ticker {ticker} not found.")
-            return f"Company ticker {ticker} not found."
+        company = yf.Ticker(ticker)
+        # Get info directly (isin check is slow and unreliable)
+        info = company.info
+        if not info or (len(info) == 1 and 'trailingPegRatio' in info):
+            print(f"No stock info found for ticker {ticker}.")
+            return f"No stock info found for ticker {ticker}."
+        return json.dumps(info)
     except Exception as e:
         print(f"Error: getting stock information for {ticker}: {e}")
         return f"Error: getting stock information for {ticker}: {e}"
-    info = company.info
-    return json.dumps(info)
 
 
 @yfinance_server.tool(
@@ -141,36 +141,31 @@ async def get_yahoo_finance_news(ticker: str) -> str:
         ticker: str
             The ticker symbol of the stock to get news for, e.g. "AAPL"
     """
-    company = yf.Ticker(ticker)
     try:
-        if company.isin is None:
-            print(f"Company ticker {ticker} not found.")
-            return f"Company ticker {ticker} not found."
+        company = yf.Ticker(ticker)
+        # Get news directly (isin check is slow and unreliable)
+        news_data = company.news
+        if not news_data:
+            print(f"No news found for ticker {ticker}.")
+            return f"No news found for ticker {ticker}."
+
+        news_list = []
+        for news in news_data:
+            if news.get("content", {}).get("contentType", "") == "STORY":
+                title = news.get("content", {}).get("title", "")
+                summary = news.get("content", {}).get("summary", "")
+                description = news.get("content", {}).get("description", "")
+                url = news.get("content", {}).get("canonicalUrl", {}).get("url", "")
+                news_list.append(
+                    f"Title: {title}\nSummary: {summary}\nDescription: {description}\nURL: {url}"
+                )
+        if not news_list:
+            print(f"No news found for company that searched with {ticker} ticker.")
+            return f"No news found for company that searched with {ticker} ticker."
+        return "\n\n".join(news_list)
     except Exception as e:
         print(f"Error: getting news for {ticker}: {e}")
         return f"Error: getting news for {ticker}: {e}"
-
-    # If the company is found, get the news
-    try:
-        news = company.news
-    except Exception as e:
-        print(f"Error: getting news for {ticker}: {e}")
-        return f"Error: getting news for {ticker}: {e}"
-
-    news_list = []
-    for news in company.news:
-        if news.get("content", {}).get("contentType", "") == "STORY":
-            title = news.get("content", {}).get("title", "")
-            summary = news.get("content", {}).get("summary", "")
-            description = news.get("content", {}).get("description", "")
-            url = news.get("content", {}).get("canonicalUrl", {}).get("url", "")
-            news_list.append(
-                f"Title: {title}\nSummary: {summary}\nDescription: {description}\nURL: {url}"
-            )
-    if not news_list:
-        print(f"No news found for company that searched with {ticker} ticker.")
-        return f"No news found for company that searched with {ticker} ticker."
-    return "\n\n".join(news_list)
 
 
 @yfinance_server.tool(
@@ -207,52 +202,52 @@ Args:
 )
 async def get_financial_statement(ticker: str, financial_type: str) -> str:
     """Get financial statement for a given ticker symbol"""
-
-    company = yf.Ticker(ticker)
     try:
-        if company.isin is None:
-            print(f"Company ticker {ticker} not found.")
-            return f"Company ticker {ticker} not found."
+        company = yf.Ticker(ticker)
+        # Get financial statement directly (isin check is slow and unreliable)
+        if financial_type == FinancialType.income_stmt:
+            financial_statement = company.income_stmt
+        elif financial_type == FinancialType.quarterly_income_stmt:
+            financial_statement = company.quarterly_income_stmt
+        elif financial_type == FinancialType.balance_sheet:
+            financial_statement = company.balance_sheet
+        elif financial_type == FinancialType.quarterly_balance_sheet:
+            financial_statement = company.quarterly_balance_sheet
+        elif financial_type == FinancialType.cashflow:
+            financial_statement = company.cashflow
+        elif financial_type == FinancialType.quarterly_cashflow:
+            financial_statement = company.quarterly_cashflow
+        else:
+            return f"Error: invalid financial type {financial_type}. Please use one of the following: {FinancialType.income_stmt}, {FinancialType.quarterly_income_stmt}, {FinancialType.balance_sheet}, {FinancialType.quarterly_balance_sheet}, {FinancialType.cashflow}, {FinancialType.quarterly_cashflow}."
+
+        if financial_statement.empty:
+            print(f"No financial statement data found for ticker {ticker}.")
+            return f"No financial statement data found for ticker {ticker}."
+
+        # Create a list to store all the json objects
+        result = []
+
+        # Loop through each column (date)
+        for column in financial_statement.columns:
+            if isinstance(column, pd.Timestamp):
+                date_str = column.strftime("%Y-%m-%d")  # Format as YYYY-MM-DD
+            else:
+                date_str = str(column)
+
+            # Create a dictionary for each date
+            date_obj = {"date": date_str}
+
+            # Add each metric as a key-value pair
+            for index, value in financial_statement[column].items():
+                # Add the value, handling NaN values
+                date_obj[index] = None if pd.isna(value) else value
+
+            result.append(date_obj)
+
+        return json.dumps(result)
     except Exception as e:
         print(f"Error: getting financial statement for {ticker}: {e}")
         return f"Error: getting financial statement for {ticker}: {e}"
-
-    if financial_type == FinancialType.income_stmt:
-        financial_statement = company.income_stmt
-    elif financial_type == FinancialType.quarterly_income_stmt:
-        financial_statement = company.quarterly_income_stmt
-    elif financial_type == FinancialType.balance_sheet:
-        financial_statement = company.balance_sheet
-    elif financial_type == FinancialType.quarterly_balance_sheet:
-        financial_statement = company.quarterly_balance_sheet
-    elif financial_type == FinancialType.cashflow:
-        financial_statement = company.cashflow
-    elif financial_type == FinancialType.quarterly_cashflow:
-        financial_statement = company.quarterly_cashflow
-    else:
-        return f"Error: invalid financial type {financial_type}. Please use one of the following: {FinancialType.income_stmt}, {FinancialType.quarterly_income_stmt}, {FinancialType.balance_sheet}, {FinancialType.quarterly_balance_sheet}, {FinancialType.cashflow}, {FinancialType.quarterly_cashflow}."
-
-    # Create a list to store all the json objects
-    result = []
-
-    # Loop through each column (date)
-    for column in financial_statement.columns:
-        if isinstance(column, pd.Timestamp):
-            date_str = column.strftime("%Y-%m-%d")  # Format as YYYY-MM-DD
-        else:
-            date_str = str(column)
-
-        # Create a dictionary for each date
-        date_obj = {"date": date_str}
-
-        # Add each metric as a key-value pair
-        for index, value in financial_statement[column].items():
-            # Add the value, handling NaN values
-            date_obj[index] = None if pd.isna(value) else value
-
-        result.append(date_obj)
-
-    return json.dumps(result)
 
 
 @yfinance_server.tool(
@@ -268,30 +263,26 @@ Args:
 )
 async def get_holder_info(ticker: str, holder_type: str) -> str:
     """Get holder information for a given ticker symbol"""
-
-    company = yf.Ticker(ticker)
     try:
-        if company.isin is None:
-            print(f"Company ticker {ticker} not found.")
-            return f"Company ticker {ticker} not found."
+        company = yf.Ticker(ticker)
+        # Get holder info directly (isin check is slow and unreliable)
+        if holder_type == HolderType.major_holders:
+            return company.major_holders.reset_index(names="metric").to_json(orient="records")
+        elif holder_type == HolderType.institutional_holders:
+            return company.institutional_holders.to_json(orient="records")
+        elif holder_type == HolderType.mutualfund_holders:
+            return company.mutualfund_holders.to_json(orient="records", date_format="iso")
+        elif holder_type == HolderType.insider_transactions:
+            return company.insider_transactions.to_json(orient="records", date_format="iso")
+        elif holder_type == HolderType.insider_purchases:
+            return company.insider_purchases.to_json(orient="records", date_format="iso")
+        elif holder_type == HolderType.insider_roster_holders:
+            return company.insider_roster_holders.to_json(orient="records", date_format="iso")
+        else:
+            return f"Error: invalid holder type {holder_type}. Please use one of the following: {HolderType.major_holders}, {HolderType.institutional_holders}, {HolderType.mutualfund_holders}, {HolderType.insider_transactions}, {HolderType.insider_purchases}, {HolderType.insider_roster_holders}."
     except Exception as e:
         print(f"Error: getting holder info for {ticker}: {e}")
         return f"Error: getting holder info for {ticker}: {e}"
-
-    if holder_type == HolderType.major_holders:
-        return company.major_holders.reset_index(names="metric").to_json(orient="records")
-    elif holder_type == HolderType.institutional_holders:
-        return company.institutional_holders.to_json(orient="records")
-    elif holder_type == HolderType.mutualfund_holders:
-        return company.mutualfund_holders.to_json(orient="records", date_format="iso")
-    elif holder_type == HolderType.insider_transactions:
-        return company.insider_transactions.to_json(orient="records", date_format="iso")
-    elif holder_type == HolderType.insider_purchases:
-        return company.insider_purchases.to_json(orient="records", date_format="iso")
-    elif holder_type == HolderType.insider_roster_holders:
-        return company.insider_roster_holders.to_json(orient="records", date_format="iso")
-    else:
-        return f"Error: invalid holder type {holder_type}. Please use one of the following: {HolderType.major_holders}, {HolderType.institutional_holders}, {HolderType.mutualfund_holders}, {HolderType.insider_transactions}, {HolderType.insider_purchases}, {HolderType.insider_roster_holders}."
 
 
 @yfinance_server.tool(
@@ -305,16 +296,17 @@ Args:
 )
 async def get_option_expiration_dates(ticker: str) -> str:
     """Fetch the available options expiration dates for a given ticker symbol."""
-
-    company = yf.Ticker(ticker)
     try:
-        if company.isin is None:
-            print(f"Company ticker {ticker} not found.")
-            return f"Company ticker {ticker} not found."
+        company = yf.Ticker(ticker)
+        # Get options directly (isin check is slow and unreliable)
+        options = company.options
+        if not options:
+            print(f"No options expiration dates found for ticker {ticker}.")
+            return f"No options expiration dates found for ticker {ticker}."
+        return json.dumps(options)
     except Exception as e:
         print(f"Error: getting option expiration dates for {ticker}: {e}")
         return f"Error: getting option expiration dates for {ticker}: {e}"
-    return json.dumps(company.options)
 
 
 @yfinance_server.tool(
@@ -341,32 +333,29 @@ async def get_option_chain(ticker: str, expiration_date: str, option_type: str) 
     Returns:
         str: JSON string containing the option chain data
     """
-
-    company = yf.Ticker(ticker)
     try:
-        if company.isin is None:
-            print(f"Company ticker {ticker} not found.")
-            return f"Company ticker {ticker} not found."
+        company = yf.Ticker(ticker)
+        # Get options directly (isin check is slow and unreliable)
+
+        # Check if the expiration date is valid
+        if expiration_date not in company.options:
+            return f"Error: No options available for the date {expiration_date}. You can use `get_option_expiration_dates` to get the available expiration dates."
+
+        # Check if the option type is valid
+        if option_type not in ["calls", "puts"]:
+            return "Error: Invalid option type. Please use 'calls' or 'puts'."
+
+        # Get the option chain
+        option_chain = company.option_chain(expiration_date)
+        if option_type == "calls":
+            return option_chain.calls.to_json(orient="records", date_format="iso")
+        elif option_type == "puts":
+            return option_chain.puts.to_json(orient="records", date_format="iso")
+        else:
+            return f"Error: invalid option type {option_type}. Please use one of the following: calls, puts."
     except Exception as e:
         print(f"Error: getting option chain for {ticker}: {e}")
         return f"Error: getting option chain for {ticker}: {e}"
-
-    # Check if the expiration date is valid
-    if expiration_date not in company.options:
-        return f"Error: No options available for the date {expiration_date}. You can use `get_option_expiration_dates` to get the available expiration dates."
-
-    # Check if the option type is valid
-    if option_type not in ["calls", "puts"]:
-        return "Error: Invalid option type. Please use 'calls' or 'puts'."
-
-    # Get the option chain
-    option_chain = company.option_chain(expiration_date)
-    if option_type == "calls":
-        return option_chain.calls.to_json(orient="records", date_format="iso")
-    elif option_type == "puts":
-        return option_chain.puts.to_json(orient="records", date_format="iso")
-    else:
-        return f"Error: invalid option type {option_type}. Please use one of the following: calls, puts."
 
 
 @yfinance_server.tool(
@@ -384,15 +373,9 @@ Args:
 )
 async def get_recommendations(ticker: str, recommendation_type: str, months_back: int = 12) -> str:
     """Get recommendations or upgrades/downgrades for a given ticker symbol"""
-    company = yf.Ticker(ticker)
     try:
-        if company.isin is None:
-            print(f"Company ticker {ticker} not found.")
-            return f"Company ticker {ticker} not found."
-    except Exception as e:
-        print(f"Error: getting recommendations for {ticker}: {e}")
-        return f"Error: getting recommendations for {ticker}: {e}"
-    try:
+        company = yf.Ticker(ticker)
+        # Get recommendations directly (isin check is slow and unreliable)
         if recommendation_type == RecommendationType.recommendations:
             return company.recommendations.to_json(orient="records")
         elif recommendation_type == RecommendationType.upgrades_downgrades:
