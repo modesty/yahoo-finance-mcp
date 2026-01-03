@@ -89,9 +89,6 @@ async def get_historical_stock_prices(
         company = yf.Ticker(ticker)
         # Get the historical data directly (isin check is slow and unreliable)
         hist_data = company.history(period=period, interval=interval)
-        if hist_data.empty:
-            print(f"No historical data found for ticker {ticker}.")
-            return f"No historical data found for ticker {ticker}."
         hist_data = hist_data.reset_index(names="Date")
         hist_data = hist_data.to_json(orient="records", date_format="iso")
         return hist_data
