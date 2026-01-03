@@ -116,7 +116,8 @@ async def get_stock_info(ticker: str) -> str:
         company = yf.Ticker(ticker)
         # Get info directly (isin check is slow and unreliable)
         info = company.info
-        if not info or (len(info) == 1 and 'trailingPegRatio' in info):
+        # Check for fundamental properties that valid tickers should have
+        if not info or 'symbol' not in info or 'quoteType' not in info:
             print(f"No stock info found for ticker {ticker}.")
             return f"No stock info found for ticker {ticker}."
         return json.dumps(info)
@@ -181,12 +182,12 @@ async def get_stock_actions(ticker: str) -> str:
     """Get stock dividends and stock splits for a given ticker symbol"""
     try:
         company = yf.Ticker(ticker)
+        actions_df = company.actions
+        actions_df = actions_df.reset_index(names="Date")
+        return actions_df.to_json(orient="records", date_format="iso")
     except Exception as e:
         print(f"Error: getting stock actions for {ticker}: {e}")
         return f"Error: getting stock actions for {ticker}: {e}"
-    actions_df = company.actions
-    actions_df = actions_df.reset_index(names="Date")
-    return actions_df.to_json(orient="records", date_format="iso")
 
 
 @yfinance_server.tool(
@@ -351,8 +352,8 @@ async def get_option_chain(ticker: str, expiration_date: str, option_type: str) 
             return option_chain.calls.to_json(orient="records", date_format="iso")
         elif option_type == "puts":
             return option_chain.puts.to_json(orient="records", date_format="iso")
-        else:
-            return f"Error: invalid option type {option_type}. Please use one of the following: calls, puts."
+        
+        return f"Error: invalid option type {option_type}. Please use one of the following: calls, puts."
     except Exception as e:
         print(f"Error: getting option chain for {ticker}: {e}")
         return f"Error: getting option chain for {ticker}: {e}"
@@ -377,10 +378,16 @@ async def get_recommendations(ticker: str, recommendation_type: str, months_back
         company = yf.Ticker(ticker)
         # Get recommendations directly (isin check is slow and unreliable)
         if recommendation_type == RecommendationType.recommendations:
-            return company.recommendations.to_json(orient="records")
+            recommendations = company.recommendations  # type: ignore
+            if recommendations.empty:  # type: ignore
+                return "[]"
+            return recommendations.to_json(orient="records")  # type: ignore
         elif recommendation_type == RecommendationType.upgrades_downgrades:
             # Get the upgrades/downgrades based on the cutoff date
-            upgrades_downgrades = company.upgrades_downgrades.reset_index()
+            upgrades_downgrades = company.upgrades_downgrades  # type: ignore
+            if upgrades_downgrades.empty:  # type: ignore
+                return "[]"
+            upgrades_downgrades = upgrades_downgrades.reset_index()  # type: ignore
             cutoff_date = pd.Timestamp.now() - pd.DateOffset(months=months_back)
             upgrades_downgrades = upgrades_downgrades[
                 upgrades_downgrades["GradeDate"] >= cutoff_date
@@ -389,6 +396,8 @@ async def get_recommendations(ticker: str, recommendation_type: str, months_back
             # Get the first occurrence (most recent) for each firm
             latest_by_firm = upgrades_downgrades.drop_duplicates(subset=["Firm"])
             return latest_by_firm.to_json(orient="records", date_format="iso")
+        else:
+            return f"Error: invalid recommendation type {recommendation_type}. Please use one of the following: {RecommendationType.recommendations}, {RecommendationType.upgrades_downgrades}."
     except Exception as e:
         print(f"Error: getting recommendations for {ticker}: {e}")
         return f"Error: getting recommendations for {ticker}: {e}"
