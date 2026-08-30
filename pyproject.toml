@@ -37,6 +37,16 @@ dev = [
 [tool.hatch.build.targets.wheel]
 only-include = ["server.py"]
 
+[tool.hatch.build.targets.sdist]
+only-include = [
+    "server.py",
+    "tests",
+    "README.md",
+    "README.zh.md",
+    "mcp_inspector.md",
+    "LICENSE",
+]
+
 [tool.black]
 line-length = 100
 target-version = ['py314']

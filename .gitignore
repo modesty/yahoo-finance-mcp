@@ -8,5 +8,10 @@ wheels/
 .coverage
 .coverage.*
 
-# Virtual environments
-.venv
+# Virtual environments and caches
+.venv/
+.uv-cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.claude/

@@ -1,15 +1,17 @@
 import json
+
 import pytest
+
 from server import (
-    get_historical_stock_prices,
-    get_stock_info,
     get_financial_statement,
+    get_historical_stock_prices,
     get_holder_info,
-    get_recommendations,
-    get_yahoo_finance_news,
-    get_stock_actions,
-    get_option_expiration_dates,
     get_option_chain,
+    get_option_expiration_dates,
+    get_recommendations,
+    get_stock_actions,
+    get_stock_info,
+    get_yahoo_finance_news,
 )
 
 # Use a stable ticker for testing
@@ -545,9 +547,7 @@ async def test_get_option_chain_strike_window_shrinks_payload():
 
     full = json.loads(await get_option_chain(TEST_TICKER, expiration_date, "calls"))
     windowed = json.loads(
-        await get_option_chain(
-            TEST_TICKER, expiration_date, "calls", strike_window_pct=0.15
-        )
+        await get_option_chain(TEST_TICKER, expiration_date, "calls", strike_window_pct=0.15)
     )
 
     assert 0 < len(windowed) <= len(full)
@@ -562,9 +562,7 @@ async def test_get_option_chain_fields_projects_columns():
     expiration_date = exp_dates[0]
 
     result = json.loads(
-        await get_option_chain(
-            TEST_TICKER, expiration_date, "calls", fields=["bid", "ask"]
-        )
+        await get_option_chain(TEST_TICKER, expiration_date, "calls", fields=["bid", "ask"])
     )
     assert len(result) > 0
     assert set(result[0].keys()) == {"strike", "bid", "ask"}
@@ -617,9 +615,7 @@ async def test_get_option_chain_documented_pricing_fields_all_resolve():
         "volume",
     ]
     result = json.loads(
-        await get_option_chain(
-            TEST_TICKER, expiration_date, "calls", fields=pricing_fields
-        )
+        await get_option_chain(TEST_TICKER, expiration_date, "calls", fields=pricing_fields)
     )
     assert set(result[0].keys()) == set(pricing_fields)
 
@@ -652,24 +648,18 @@ async def test_get_option_chain_unusable_filters_degrade_to_full_chain():
     # No requested field exists -> a strike-only chain would look valid but be
     # unusable, so the full chain is returned instead.
     all_unknown = json.loads(
-        await get_option_chain(
-            TEST_TICKER, expiration_date, "calls", fields=["not_a_column"]
-        )
+        await get_option_chain(TEST_TICKER, expiration_date, "calls", fields=["not_a_column"])
     )
     assert all_unknown == full
 
     # A window so narrow it selects nothing must not return an empty chain.
     empty_window = json.loads(
-        await get_option_chain(
-            TEST_TICKER, expiration_date, "calls", strike_window_pct=0.0001
-        )
+        await get_option_chain(TEST_TICKER, expiration_date, "calls", strike_window_pct=0.0001)
     )
     assert len(empty_window) == len(full)
 
     # A non-positive window is treated as "no filtering".
     zero_window = json.loads(
-        await get_option_chain(
-            TEST_TICKER, expiration_date, "calls", strike_window_pct=0
-        )
+        await get_option_chain(TEST_TICKER, expiration_date, "calls", strike_window_pct=0)
     )
     assert len(zero_window) == len(full)

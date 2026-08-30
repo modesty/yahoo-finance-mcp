@@ -114,7 +114,7 @@ async def get_stock_info(ticker: str) -> str:
         # Get info directly (isin check is slow and unreliable)
         info = company.info
         # Check for fundamental properties that valid tickers should have
-        if not info or 'symbol' not in info or 'quoteType' not in info:
+        if not info or "symbol" not in info or "quoteType" not in info:
             print(f"No stock info found for ticker {ticker}.")
             return f"No stock info found for ticker {ticker}."
         return json.dumps(info)
@@ -265,9 +265,11 @@ async def get_holder_info(ticker: str, holder_type: str) -> str:
         company = yf.Ticker(ticker)
         # Get holder info directly (isin check is slow and unreliable)
         if holder_type == HolderType.major_holders:
-            return company.major_holders.reset_index(names="metric").to_json(orient="records")
+            return company.major_holders.reset_index(names="metric").to_json(
+                orient="records", date_format="iso"
+            )
         elif holder_type == HolderType.institutional_holders:
-            return company.institutional_holders.to_json(orient="records")
+            return company.institutional_holders.to_json(orient="records", date_format="iso")
         elif holder_type == HolderType.mutualfund_holders:
             return company.mutualfund_holders.to_json(orient="records", date_format="iso")
         elif holder_type == HolderType.insider_transactions:
@@ -358,8 +360,7 @@ def _window_strikes(
         return chain
 
     windowed = chain[
-        (chain["strike"] >= spot * (1 - window))
-        & (chain["strike"] <= spot * (1 + window))
+        (chain["strike"] >= spot * (1 - window)) & (chain["strike"] <= spot * (1 + window))
     ]
     return windowed if not windowed.empty else chain
 
@@ -495,7 +496,7 @@ async def get_recommendations(ticker: str, recommendation_type: str, months_back
             recommendations = company.recommendations  # type: ignore
             if recommendations.empty:  # type: ignore
                 return "[]"
-            return recommendations.to_json(orient="records")  # type: ignore
+            return recommendations.to_json(orient="records", date_format="iso")  # type: ignore
         elif recommendation_type == RecommendationType.upgrades_downgrades:
             # Get the upgrades/downgrades based on the cutoff date
             upgrades_downgrades = company.upgrades_downgrades  # type: ignore

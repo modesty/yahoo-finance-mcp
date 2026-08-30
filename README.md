@@ -132,6 +132,10 @@ If you are working inside a local clone and want to run the source tree directly
 uv run server.py
 ```
 
+### Testing with MCP Inspector
+
+For interactive testing, CLI schema verification, and tool execution via the command line, see [MCP Inspector Testing Guide](mcp_inspector.md).
+
 ### Integration with Claude for Desktop
 
 To integrate this server with Claude for Desktop:

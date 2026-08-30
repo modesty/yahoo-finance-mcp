@@ -126,11 +126,15 @@ uvx --from . yahoo-finance-mcp
 
 ### 开发模式
 
-如果您正在本地克隆仓库中直接调试源码，可以运行：
+如果正在本地克隆仓库中直接调试源码，可以运行：
 
 ```bash
 uv run server.py
 ```
+
+### 使用 MCP Inspector 测试
+
+有关交互式测试、命令行模式工具调用与 Schema 校验，请参阅 [MCP Inspector 测试指南](mcp_inspector.md)。
 
 ### 与 Claude Desktop 集成
 
